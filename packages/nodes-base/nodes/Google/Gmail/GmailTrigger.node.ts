@@ -293,6 +293,16 @@ export class GmailTrigger implements INodeType {
 					qs,
 				);
 
+				// [ria]
+				// const includeDrafts = this.getNodeParameter('includeDrafts') as boolean; // need to figure out where to put the toggle
+				const includeDrafts = false;
+
+				if (!includeDrafts) {
+					// email: Message (from types.ts) -> why are we not importing these?
+					responseData = responseData.filter((email: any) => !email.labelIds.includes('DRAFT'));
+				}
+				// need to skip on if responseData is empty..
+
 				if (!simple) {
 					const dataPropertyNameDownload =
 						(options.dataPropertyAttachmentsPrefixName as string) || 'attachment_';
