@@ -7,7 +7,6 @@ import type {
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
-import type { Message } from './types';
 import { NodeConnectionType } from 'n8n-workflow';
 
 import { DateTime } from 'luxon';
@@ -278,14 +277,10 @@ export class GmailTrigger implements INodeType {
 			);
 			responseData = responseData.messages;
 
-			function checkResponseDataHasMessages() {
-				if (!responseData?.length) {
-					nodeStaticData.lastTimeChecked = endDate;
-					return null;
-				}
+			if (!responseData?.length) {
+				nodeStaticData.lastTimeChecked = endDate;
+				return null;
 			}
-
-			checkResponseDataHasMessages();
 
 			const simple = this.getNodeParameter('simple') as boolean;
 
@@ -296,6 +291,14 @@ export class GmailTrigger implements INodeType {
 				qs.format = 'raw';
 			}
 
+			// [ria]
+			// check qs when sent to Google
+			// check includeDraft is changed correctly
+			// check when all drafts filtered out and responseData is empty -> no parsing should be made
+
+			const includeDrafts = (qs.includeDrafts as boolean) || false;
+			delete qs.includeDrafts;
+
 			for (let i = 0; i < responseData.length; i++) {
 				responseData[i] = await googleApiRequest.call(
 					this,
@@ -304,17 +307,11 @@ export class GmailTrigger implements INodeType {
 					{},
 					qs,
 				);
-
-				// [ria]
-				const includeDrafts = (qs.includeDrafts as boolean) || false;
-
 				if (!includeDrafts) {
-					// email: Message (from types.ts) -> why are we not importing these?
-					responseData = responseData.filter((email: Message) => !email.labelIds.includes('DRAFT'));
-					checkResponseDataHasMessages(); // in case only DRAFTs were fetched and the response is empty now
-				}
-				// [ria] problem now that responseData is empty and can't be parsed on the 'raw' property
-				if (!simple) {
+					if (responseData[i].labelIds.includes('DRAFT')) {
+						responseData.splice(i, 1);
+					}
+				} else if (!simple) {
 					const dataPropertyNameDownload =
 						(options.dataPropertyAttachmentsPrefixName as string) || 'attachment_';
 
@@ -326,7 +323,7 @@ export class GmailTrigger implements INodeType {
 				}
 			}
 
-			if (simple) {
+			if (simple && responseData.length) {
 				responseData = this.helpers.returnJsonArray(
 					await simplifyOutput.call(this, responseData as IDataObject[]),
 				);
@@ -345,9 +342,6 @@ export class GmailTrigger implements INodeType {
 				},
 			);
 		}
-
-		// [ria] replace with function call?
-		// 					checkResponseDataHasMessages();
 
 		if (!responseData?.length) {
 			nodeStaticData.lastTimeChecked = endDate;
