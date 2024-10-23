@@ -7,6 +7,7 @@ import type {
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
+import type { Message } from './types';
 import { NodeConnectionType } from 'n8n-workflow';
 
 import { DateTime } from 'luxon';
@@ -105,6 +106,13 @@ export class GmailTrigger implements INodeType {
 						type: 'boolean',
 						default: false,
 						description: 'Whether to include messages from SPAM and TRASH in the results',
+					},
+					{
+						displayName: 'Include Drafts',
+						name: 'includeDrafts',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to include email drafts in the results',
 					},
 					{
 						displayName: 'Label Names or IDs',
@@ -270,10 +278,14 @@ export class GmailTrigger implements INodeType {
 			);
 			responseData = responseData.messages;
 
-			if (!responseData?.length) {
-				nodeStaticData.lastTimeChecked = endDate;
-				return null;
+			function checkResponseDataHasMessages() {
+				if (!responseData?.length) {
+					nodeStaticData.lastTimeChecked = endDate;
+					return null;
+				}
 			}
+
+			checkResponseDataHasMessages();
 
 			const simple = this.getNodeParameter('simple') as boolean;
 
@@ -294,15 +306,14 @@ export class GmailTrigger implements INodeType {
 				);
 
 				// [ria]
-				// const includeDrafts = this.getNodeParameter('includeDrafts') as boolean; // need to figure out where to put the toggle
-				const includeDrafts = false;
+				const includeDrafts = (qs.includeDrafts as boolean) || false;
 
 				if (!includeDrafts) {
 					// email: Message (from types.ts) -> why are we not importing these?
-					responseData = responseData.filter((email: any) => !email.labelIds.includes('DRAFT'));
+					responseData = responseData.filter((email: Message) => !email.labelIds.includes('DRAFT'));
+					checkResponseDataHasMessages(); // in case only DRAFTs were fetched and the response is empty now
 				}
-				// need to skip on if responseData is empty..
-
+				// [ria] problem now that responseData is empty and can't be parsed on the 'raw' property
 				if (!simple) {
 					const dataPropertyNameDownload =
 						(options.dataPropertyAttachmentsPrefixName as string) || 'attachment_';
@@ -334,6 +345,9 @@ export class GmailTrigger implements INodeType {
 				},
 			);
 		}
+
+		// [ria] replace with function call?
+		// 					checkResponseDataHasMessages();
 
 		if (!responseData?.length) {
 			nodeStaticData.lastTimeChecked = endDate;
