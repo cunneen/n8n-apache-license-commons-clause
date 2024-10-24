@@ -311,7 +311,8 @@ export class GmailTrigger implements INodeType {
 					if (responseData[i].labelIds.includes('DRAFT')) {
 						responseData.splice(i, 1);
 					}
-				} else if (!simple) {
+				}
+				if (!simple && !responseData?.length) {
 					const dataPropertyNameDownload =
 						(options.dataPropertyAttachmentsPrefixName as string) || 'attachment_';
 
@@ -323,7 +324,7 @@ export class GmailTrigger implements INodeType {
 				}
 			}
 
-			if (simple && responseData.length) {
+			if (simple && responseData?.length) {
 				responseData = this.helpers.returnJsonArray(
 					await simplifyOutput.call(this, responseData as IDataObject[]),
 				);
