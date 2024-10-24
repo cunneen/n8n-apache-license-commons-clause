@@ -233,6 +233,9 @@ export class GmailTrigger implements INodeType {
 		},
 	};
 
+	// where is this called from? -> workflow.ts 1224
+	// how to break out from it and go to the next step? -> in case we have no emails that we want to return (discard drafts)
+	// but still need to update last poll time for such an event
 	async poll(this: IPollFunctions): Promise<INodeExecutionData[][] | null> {
 		const workflowStaticData = this.getWorkflowStaticData('node');
 		const node = this.getNode();
@@ -312,7 +315,9 @@ export class GmailTrigger implements INodeType {
 						responseData.splice(i, 1);
 					}
 				}
-				if (!simple && !responseData?.length) {
+				// here gets parsed to n8n format {json: {id: '123', threadId: '456', ...}}
+				// can filter the DRAFT emails out here, but then we continue with empty responseData and currently no handling for that
+				if (!simple) {
 					const dataPropertyNameDownload =
 						(options.dataPropertyAttachmentsPrefixName as string) || 'attachment_';
 
@@ -350,10 +355,11 @@ export class GmailTrigger implements INodeType {
 		}
 
 		const emailsWithInvalidDate = new Set<string>();
-
+		// if no emails (responseData.length === 0 or responseData undefined?)then skip the below steps:
+		// unless... we keep doing these steps to get the correct time stamps, so the emails are counted, but should not be returned....
 		const getEmailDateAsSeconds = (email: IDataObject): number => {
 			let date;
-
+			// error here
 			if (email.internalDate) {
 				date = +(email.internalDate as string) / 1000;
 			} else if (email.date) {
@@ -397,6 +403,8 @@ export class GmailTrigger implements INodeType {
 
 		nodeStaticData.possibleDuplicates = nextPollPossibleDuplicates;
 		nodeStaticData.lastTimeChecked = lastEmailDate || endDate;
+
+		// filter out draft emails here... even though it's less efficient because they have been all parsed before
 
 		if (Array.isArray(responseData) && responseData.length) {
 			return [responseData as INodeExecutionData[]];
