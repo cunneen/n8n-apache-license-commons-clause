@@ -233,9 +233,6 @@ export class GmailTrigger implements INodeType {
 		},
 	};
 
-	// where is this called from? -> workflow.ts 1224
-	// how to break out from it and go to the next step? -> in case we have no emails that we want to return (discard drafts)
-	// but still need to update last poll time for such an event
 	async poll(this: IPollFunctions): Promise<INodeExecutionData[][] | null> {
 		const workflowStaticData = this.getWorkflowStaticData('node');
 		const node = this.getNode();
@@ -294,10 +291,16 @@ export class GmailTrigger implements INodeType {
 				qs.format = 'raw';
 			}
 
-			// [ria]
+			// [ria] tests:
 			// check qs when sent to Google
+			// check with no filter options open
+			// check with filter options open (no change)
+			// check with filter options open (toggle active)
 			// check includeDraft is changed correctly
 			// check when all drafts filtered out and responseData is empty -> no parsing should be made
+			// check with only drafts as new events -> confirm linear test case invite loop doesn't work anymore
+			// check with some new emails as well as drafts in event
+			// check all of the above on manual as well
 
 			const includeDrafts = (qs.includeDrafts as boolean) || false;
 			delete qs.includeDrafts;
@@ -316,8 +319,8 @@ export class GmailTrigger implements INodeType {
 					}
 				}
 				// here gets parsed to n8n format {json: {id: '123', threadId: '456', ...}}
-				// can filter the DRAFT emails out here, but then we continue with empty responseData and currently no handling for that
-				if (!simple) {
+				// can filter the DRAFT emails out here, but then we continue with empty responseData and that leads to further problems
+				if (!simple && responseData?.length) {
 					const dataPropertyNameDownload =
 						(options.dataPropertyAttachmentsPrefixName as string) || 'attachment_';
 
@@ -348,7 +351,7 @@ export class GmailTrigger implements INodeType {
 				},
 			);
 		}
-
+		// if no messages in responseData we should return null and break out of the poll function!! but it doesn't
 		if (!responseData?.length) {
 			nodeStaticData.lastTimeChecked = endDate;
 			return null;
@@ -359,7 +362,7 @@ export class GmailTrigger implements INodeType {
 		// unless... we keep doing these steps to get the correct time stamps, so the emails are counted, but should not be returned....
 		const getEmailDateAsSeconds = (email: IDataObject): number => {
 			let date;
-			// error here
+			// error was thrown from here because responseData was empty and lead to email=undefined
 			if (email.internalDate) {
 				date = +(email.internalDate as string) / 1000;
 			} else if (email.date) {
